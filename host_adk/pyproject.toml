@@ -1,0 +1,69 @@
+# This file defines the workspace for the a2a-friend-scheduling project.
+# It tells uv that this project is a monorepo containing multiple packages.
+
+[project]
+name = "EmergencyAIAgent"
+version = "0.1.0"
+description = "A multi-agent system for ambulance emergency system."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    # Core ADK & A2A Dependencies
+    "google-adk>=1.5.0",
+    "a2a-sdk>=0.2.5",
+    "nest-asyncio>=1.6.0",
+    "mcp==1.9.1",
+    
+    # Configuration & Environment
+    "python-dotenv==1.1.1",
+    "click==8.2.1",
+    "PyYAML==6.0.2",
+    
+    # Web Framework & Server
+    "fastapi==0.116.0",
+    "uvicorn==0.35.0",
+    
+    # HTTP Clients & Networking
+    "httpx==0.28.1",
+    "aiohttp==3.12.14",
+    "requests==2.32.4",
+    "websockets==15.0.1",
+    
+    # Google Cloud & AI Services
+    "google-generativeai",  # Keep flexible as requested
+    "google-genai==1.24.0",
+    "google-api-python-client==2.176.0",
+    "google-cloud-aiplatform==1.102.0",
+    "google-cloud-bigquery==3.34.0",
+    "google-cloud-logging==3.12.1",
+    "google-cloud-secret-manager==2.24.0",
+    "google-cloud-speech==2.33.0",
+    "google-cloud-storage==2.19.0",
+    
+    # AI & ML Libraries
+    "openai==1.95.0",
+    "litellm==1.74.1",
+    "transformers==4.51.3",
+    "huggingface-hub==0.33.2",
+    "numpy==2.3.1",
+    "tiktoken==0.9.0",
+    
+    # Data Validation & Processing
+    "pydantic==2.11.7",
+    "pydantic-settings==2.10.1",
+    "jsonschema==4.24.0",
+    
+    # Database
+    "SQLAlchemy==2.0.41",
+    
+    # Security & Authentication
+    "Authlib==1.6.0",
+    "cryptography==45.0.5",
+    
+    # Utilities
+    "tenacity==8.5.0",
+    "graphviz==0.21",
+    "shapely==2.1.1",
+    "python-multipart==0.0.20",
+]
+
