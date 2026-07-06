@@ -14,3 +14,4 @@ node_modules/
 # Claude Code
 .claude/
 fill_keys.sh
+set_gemini_keys.sh
