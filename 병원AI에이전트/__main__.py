@@ -1,4 +1,8 @@
-"""A2A server for 교통AI에이전트 (port 10002)."""
+"""A2A server for one hospital instance.
+
+Run with a hospital profile:
+    HOSPITAL_PROFILE=configs/대전선병원.env uv run .
+"""
 
 import logging
 import os
@@ -11,6 +15,10 @@ from dotenv import load_dotenv
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Profile first (hospital identity), then .env (shared secrets); profile wins.
+_profile = os.getenv("HOSPITAL_PROFILE")
+if _profile:
+    load_dotenv(_profile, override=True)
 load_dotenv()
 
 import uvicorn
@@ -26,8 +34,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 from agent import create_agent
-
-AGENT_NAME = "교통AI에이전트"
 
 
 class BearerAuthMiddleware(BaseHTTPMiddleware):
@@ -55,22 +61,31 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
 
 
 def _data_dir() -> Path:
+    # Outside the repo: SQLite files must not live in an iCloud-synced tree.
     path = Path(os.getenv("AMBULANCE_DATA_DIR", "~/.ambulance")).expanduser()
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def main():
+    agent_name = os.getenv("HOSPITAL_AGENT_NAME")
+    hospital_name = os.getenv("HOSPITAL_NAME", agent_name or "병원")
+    if not agent_name:
+        logger.error(
+            "HOSPITAL_AGENT_NAME is not set. Start with a profile, e.g. "
+            "HOSPITAL_PROFILE=configs/대전선병원.env uv run ."
+        )
+        raise SystemExit(1)
     if not os.getenv("GOOGLE_API_KEY") and os.getenv("GOOGLE_GENAI_USE_VERTEXAI") != "TRUE":
         logger.error("GOOGLE_API_KEY environment variable not set and GOOGLE_GENAI_USE_VERTEXAI is not TRUE.")
         raise SystemExit(1)
 
     host = os.getenv("HOST", "localhost")
-    port = int(os.getenv("PORT", "10002"))
+    port = int(os.getenv("PORT", "10004"))
 
     agent_card = AgentCard(
-        name=AGENT_NAME,
-        description="An agent that returns nearby emergency rooms ranked by real drive-time ETA",
+        name=agent_name,
+        description=f"{hospital_name}의 응급환자 수용 가능 여부(의료진/수술실/베드)를 확인하는 에이전트",
         url=f"http://{host}:{port}/",
         version="2.0.0",
         default_input_modes=["text/plain"],
@@ -78,11 +93,11 @@ def main():
         capabilities=AgentCapabilities(streaming=True),
         skills=[
             AgentSkill(
-                id="find-nearest-emergency-rooms",
-                name="Find nearest emergency rooms",
-                description="Ranks nearby emergency rooms by traffic-aware ETA from the patient's location",
-                tags=["hospitals", "location", "eta"],
-                examples=["지금 카이스트 문지캠퍼스인데 근처 응급실을 가까운 순으로 알려줘."],
+                id="er-acceptance-check",
+                name="응급환자 수용 가능 여부 확인",
+                description="필요 진료과 기준으로 수술가능 의사·수술실·베드를 확인해 수용 여부를 판단",
+                tags=["hospital", "emergency", "availability"],
+                examples=["신경외과 의사가 필요한 응급환자입니다. 수용 가능 여부를 확인해주세요."],
             )
         ],
     )
@@ -90,17 +105,17 @@ def main():
     data_dir = _data_dir()
     adk_agent = create_agent()
     runner = Runner(
-        app_name=AGENT_NAME,
+        app_name=agent_name,
         agent=adk_agent,
         artifact_service=InMemoryArtifactService(),
         session_service=DatabaseSessionService(
-            f"sqlite+aiosqlite:///{data_dir}/{AGENT_NAME}_sessions.db"
+            f"sqlite+aiosqlite:///{data_dir}/{agent_name}_sessions.db"
         ),
         memory_service=InMemoryMemoryService(),
     )
 
     task_engine = create_async_engine(
-        f"sqlite+aiosqlite:///{data_dir}/{AGENT_NAME}_tasks.db"
+        f"sqlite+aiosqlite:///{data_dir}/{agent_name}_tasks.db"
     )
 
     @asynccontextmanager
@@ -128,7 +143,7 @@ def main():
             "agent before handling real patient data."
         )
 
-    logger.info("Starting %s on %s:%s (data dir: %s)", AGENT_NAME, host, port, data_dir)
+    logger.info("Starting %s on %s:%s (data dir: %s)", agent_name, host, port, data_dir)
     uvicorn.run(app, host=host, port=port)
 
 

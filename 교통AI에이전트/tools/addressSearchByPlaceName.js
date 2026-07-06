@@ -10,21 +10,15 @@ dotenv_1.default.config();
 exports.addressSearchByPlaceNameSchema = {
     placeName: zod_1.z.string(),
 };
+const kakaoFetch_js_1 = require("./kakaoFetch.js");
 const addressSearchByPlaceNameHandler = async ({ placeName }) => {
-    const response = await fetch(`https://dapi.kakao.com/v2/local/search/keyword?query=${placeName}`, {
+    const result = await kakaoFetch_js_1.kakaoFetchJson(`https://dapi.kakao.com/v2/local/search/keyword?query=${encodeURIComponent(placeName)}`, {
         method: "GET",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `KakaoAK ${process.env.KAKAO_REST_API_KEY}`,
-        },
+        headers: kakaoFetch_js_1.kakaoHeaders(),
     });
-    const data = await response.json();
-    return {
-        content: [{
-                type: "text",
-                text: JSON.stringify(data),
-            }],
-        isError: false,
-    };
+    if (!result.ok) {
+        return kakaoFetch_js_1.toolError(`address_search_by_place_name failed: ${result.error}`);
+    }
+    return kakaoFetch_js_1.toolSuccess(result.data);
 };
 exports.addressSearchByPlaceNameHandler = addressSearchByPlaceNameHandler;

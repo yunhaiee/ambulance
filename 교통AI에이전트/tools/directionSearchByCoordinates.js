@@ -13,21 +13,15 @@ exports.directionSearchByCoordinatesSchema = {
     destLongitude: zod_1.z.number(),
     destLatitude: zod_1.z.number(),
 };
+const kakaoFetch_js_1 = require("./kakaoFetch.js");
 const directionSearchByCoordinatesHandler = async ({ originLongitude, originLatitude, destLongitude, destLatitude, }) => {
-    const response = await fetch(`https://apis-navi.kakaomobility.com/v1/directions?origin=${originLongitude},${originLatitude}&destination=${destLongitude},${destLatitude}`, {
+    const result = await kakaoFetch_js_1.kakaoFetchJson(`https://apis-navi.kakaomobility.com/v1/directions?origin=${originLongitude},${originLatitude}&destination=${destLongitude},${destLatitude}`, {
         method: "GET",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `KakaoAK ${process.env.KAKAO_REST_API_KEY}`,
-        },
+        headers: kakaoFetch_js_1.kakaoHeaders(),
     });
-    const data = await response.json();
-    return {
-        content: [{
-                type: "text",
-                text: JSON.stringify(data),
-            }],
-        isError: false,
-    };
+    if (!result.ok) {
+        return kakaoFetch_js_1.toolError(`direction_search_by_coords failed: ${result.error}`);
+    }
+    return kakaoFetch_js_1.toolSuccess(result.data);
 };
 exports.directionSearchByCoordinatesHandler = directionSearchByCoordinatesHandler;

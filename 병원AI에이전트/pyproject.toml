@@ -1,10 +1,10 @@
-# Host (구급AI에이전트) - orchestrates the emergency dispatch via A2A.
-# Dependencies are intentionally minimal: only what the code imports.
+# Parameterized hospital agent - one codebase, N hospital instances.
+# Start with: HOSPITAL_PROFILE=configs/<병원>.env uv run .
 
 [project]
-name = "EmergencyAIAgent"
+name = "HospitalAIAgent"
 version = "0.2.0"
-description = "A multi-agent system for ambulance emergency dispatch (host agent)."
+description = "Parameterized ER acceptance agent (one service, N hospital profiles)"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -12,8 +12,8 @@ dependencies = [
     # google-adk 2.3.0 pins a2a-sdk <0.4; track ADK's supported range.
     "a2a-sdk[http-server]>=0.3.4,<0.4",
     "httpx>=0.28",
-    "nest-asyncio>=1.6.0",
     "python-dotenv>=1.1",
-    "pydantic>=2.11",
     "uvicorn>=0.35",
+    "aiosqlite>=0.20",
+    "sqlalchemy[asyncio]>=2.0",
 ]

@@ -13,12 +13,14 @@ const addressSearchByPlaceName_js_1 = require("./tools/addressSearchByPlaceName.
 const geocode_js_1 = require("./tools/geocode.js");
 const futureDirectionSearchByCoordinates_js_1 = require("./tools/futureDirectionSearchByCoordinates.js");
 const multiDestinationDirectionSearch_js_1 = require("./tools/multiDestinationDirectionSearch.js");
+const nearestEmergencyRooms_js_1 = require("./tools/nearestEmergencyRooms.js");
 // Create an MCP server
 const server = new mcp_js_1.McpServer({
     name: "Traffic Data MCP Server",
-    version: "1.0.2",
+    version: "1.1.0",
 });
 // Register tools
+server.tool("find_nearest_emergency_rooms", "PREFERRED: One-shot search for the nearest emergency rooms. Resolves the origin (place name, address, or coordinates), finds ER candidates nearby, computes real drive-time ETAs for all of them in a single traffic-aware request, and returns a ranked JSON list sorted by ETA. Use this instead of chaining geocode/search/direction tools.", nearestEmergencyRooms_js_1.nearestEmergencyRoomsSchema, nearestEmergencyRooms_js_1.nearestEmergencyRoomsHandler);
 server.tool("direction_search_by_coords", "Search for directions between two points using their coordinates (longitude and latitude). This tool provides navigation information including distance, duration, and route details.", directionSearchByCoordinates_js_1.directionSearchByCoordinatesSchema, directionSearchByCoordinates_js_1.directionSearchByCoordinatesHandler);
 server.tool("direction_search_by_address", "Search for directions between two locations using their addresses. The tool first geocodes the addresses to coordinates, then finds the optimal route between them.", directionSearchByAddress_js_1.directionSearchByAddressSchema, directionSearchByAddress_js_1.directionSearchByAddressHandler);
 server.tool("address_search_by_place_name", "Search for addresses using a place name or keyword. Returns detailed location information including coordinates and address details.", addressSearchByPlaceName_js_1.addressSearchByPlaceNameSchema, addressSearchByPlaceName_js_1.addressSearchByPlaceNameHandler);
