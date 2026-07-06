@@ -48,7 +48,20 @@ def _normalize(name: str) -> str:
     return re.sub(r"\s+|AI에이전트|응급의료센터|응급센터|응급실", "", name)
 
 
-_JSON_BLOCK = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
+# Capture everything between the ```json fences (handles nested braces).
+_JSON_BLOCK = re.compile(r"```json\s*(.+?)\s*```", re.DOTALL)
+
+
+def _find_decision(obj) -> dict | None:
+    """Recursively find a dict carrying a string "decision" (the LLM may nest it)."""
+    if isinstance(obj, dict):
+        if isinstance(obj.get("decision"), str):
+            return obj
+        for value in obj.values():
+            found = _find_decision(value)
+            if found:
+                return found
+    return None
 
 
 def _parse_hospital_reply(text: str) -> dict:
@@ -62,8 +75,9 @@ def _parse_hospital_reply(text: str) -> dict:
             payload = json.loads(match.group(1))
         except json.JSONDecodeError:
             continue
-        if "decision" in payload:
-            return payload
+        found = _find_decision(payload)
+        if found:
+            return found
     if "수용불가" in text or "❌" in text:
         return {"decision": "decline"}
     if "수용가능" in text or "✅" in text:
