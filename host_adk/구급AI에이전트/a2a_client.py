@@ -16,11 +16,24 @@ import time
 import httpx
 from a2a.client import A2ACardResolver, ClientConfig, ClientFactory
 from a2a.client.helpers import create_text_message_object
-from a2a.types import AgentCard, Message, Role, Task
+from a2a.types import (
+    AgentCard,
+    Message,
+    Role,
+    Task,
+    TaskQueryParams,
+    TaskState,
+)
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT_S = float(os.getenv("A2A_CALL_TIMEOUT_S", "45"))
+_TERMINAL_STATES = {
+    TaskState.completed,
+    TaskState.failed,
+    TaskState.canceled,
+    TaskState.rejected,
+}
 
 
 def a2a_auth_headers() -> dict[str, str]:
@@ -145,16 +158,29 @@ class RemoteAgentRegistry:
         return _done({"status": "success", "agent": agent_name, "text": reply})
 
     async def _send_once(self, agent_name: str, text: str) -> str:
+        """Send a message and wait for the remote task to actually finish.
+
+        The ADK to_a2a server processes the request asynchronously: the initial
+        response carries a `submitted`/`working` task (no result yet), so we poll
+        get_task until a terminal state before reading the artifacts. The outer
+        asyncio.wait_for in send() bounds the total wait.
+        """
         client = self._clients[agent_name]
         message = create_text_message_object(Role.user, text)
-        last_task_text = ""
+        task: Task | None = None
         last_message_text = ""
         async for event in client.send_message(message):
             if isinstance(event, Message):
                 last_message_text = _message_text(event)
             else:
                 task, _update = event
-                task_text = _task_text(task)
-                if task_text:
-                    last_task_text = task_text
-        return last_task_text or last_message_text
+
+        if task is None:
+            return last_message_text
+
+        # Poll until the task reaches a terminal state, then read its artifacts.
+        while task.status is None or task.status.state not in _TERMINAL_STATES:
+            await asyncio.sleep(0.6)
+            task = await client.get_task(TaskQueryParams(id=task.id))
+
+        return _task_text(task) or last_message_text
