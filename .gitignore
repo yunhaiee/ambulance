@@ -1,0 +1,15 @@
+# Secrets - never commit real keys/tokens (use .env.example as the template)
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Node
+node_modules/
+
+# Claude Code
+.claude/

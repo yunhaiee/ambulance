@@ -10,22 +10,16 @@ dotenv_1.default.config();
 exports.geocodeSchema = {
     placeName: zod_1.z.string(),
 };
+const kakaoFetch_js_1 = require("./kakaoFetch.js");
 const geocodeHandler = async ({ placeName }) => {
     const encodedPlaceName = encodeURIComponent(placeName);
-    const response = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodedPlaceName}`, {
+    const result = await kakaoFetch_js_1.kakaoFetchJson(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodedPlaceName}`, {
         method: "GET",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `KakaoAK ${process.env.KAKAO_REST_API_KEY}`,
-        },
+        headers: kakaoFetch_js_1.kakaoHeaders(),
     });
-    const data = await response.json();
-    return {
-        content: [{
-                type: "text",
-                text: JSON.stringify(data),
-            }],
-        isError: false,
-    };
+    if (!result.ok) {
+        return kakaoFetch_js_1.toolError(`geocode failed: ${result.error}`);
+    }
+    return kakaoFetch_js_1.toolSuccess(result.data);
 };
 exports.geocodeHandler = geocodeHandler;

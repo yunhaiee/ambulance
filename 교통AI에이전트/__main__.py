@@ -1,91 +1,135 @@
+"""A2A server for 교통AI에이전트 (port 10002)."""
+
 import logging
 import os
+import secrets
+from contextlib import asynccontextmanager
+from pathlib import Path
 
-import uvicorn
-from a2a.server.apps import A2AStarletteApplication
-from a2a.server.request_handlers import DefaultRequestHandler
-from a2a.server.tasks import InMemoryTaskStore
-from a2a.types import (
-    AgentCapabilities,
-    AgentCard,
-    AgentSkill,
-)
-from agent import create_agent
-from agent_executor import TrafficAgentExecutor
 from dotenv import load_dotenv
-from google.adk.artifacts import InMemoryArtifactService
-from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
-from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
-
-load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+load_dotenv()
 
-class MissingAPIKeyError(Exception):
-    """Exception for missing API key."""
+import uvicorn
+from a2a.server.tasks import DatabaseTaskStore
+from a2a.types import AgentCapabilities, AgentCard, AgentSkill
+from google.adk.a2a.utils.agent_to_a2a import to_a2a
+from google.adk.artifacts import InMemoryArtifactService
+from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
+from google.adk.runners import Runner
+from google.adk.sessions import DatabaseSessionService
+from sqlalchemy.ext.asyncio import create_async_engine
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 
-    pass
+from agent import create_agent
+
+AGENT_NAME = "교통AI에이전트"
+
+
+class BearerAuthMiddleware(BaseHTTPMiddleware):
+    """Rejects A2A requests without the shared bearer token.
+
+    Agent card discovery (GET /.well-known/*) stays public; everything else
+    requires "Authorization: Bearer <A2A_AUTH_TOKEN>".
+    """
+
+    def __init__(self, app, token: str):
+        super().__init__(app)
+        self._expected = f"Bearer {token}"
+
+    async def dispatch(self, request, call_next):
+        if request.method == "GET" and request.url.path.startswith("/.well-known/"):
+            return await call_next(request)
+        provided = request.headers.get("authorization") or ""
+        try:
+            authorized = secrets.compare_digest(provided, self._expected)
+        except TypeError:
+            authorized = False
+        if not authorized:
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        return await call_next(request)
+
+
+def _data_dir() -> Path:
+    path = Path(os.getenv("AMBULANCE_DATA_DIR", "~/.ambulance")).expanduser()
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def main():
-    """Starts the agent server."""
-    host = "localhost"
-    port = 10002
-    try:
-        # Check for API key only if Vertex AI is not configured
-        if not os.getenv("GOOGLE_GENAI_USE_VERTEXAI") == "TRUE":
-            if not os.getenv("GOOGLE_API_KEY"):
-                raise MissingAPIKeyError(
-                    "GOOGLE_API_KEY environment variable not set and GOOGLE_GENAI_USE_VERTEXAI is not TRUE."
-                )
+    if not os.getenv("GOOGLE_API_KEY") and os.getenv("GOOGLE_GENAI_USE_VERTEXAI") != "TRUE":
+        logger.error("GOOGLE_API_KEY environment variable not set and GOOGLE_GENAI_USE_VERTEXAI is not TRUE.")
+        raise SystemExit(1)
 
-        capabilities = AgentCapabilities(streaming=True)
-        skill = AgentSkill(
-            id="check nearby hospitals",
-            name="Check nearby hospitals",
-            description="Checks nearby hospitals based on a given location of a patient",
-            tags=["hospitals", "location"],
-            examples=["지금 카이스트 문지캠퍼슨데 근처 병원 가까운순으로 10개 나열해줘."],
-        )
-        agent_card = AgentCard(
-            name="교통AI에이전트",
-            description="An agent that checks nearby hospitals based on a given location of a patient",
-            url=f"http://{host}:{port}/",
-            version="1.0.0",
-            defaultInputModes=["text/plain"],
-            defaultOutputModes=["text/plain"],
-            capabilities=capabilities,
-            skills=[skill],
+    host = os.getenv("HOST", "localhost")
+    port = int(os.getenv("PORT", "10002"))
+
+    agent_card = AgentCard(
+        name=AGENT_NAME,
+        description="An agent that returns nearby emergency rooms ranked by real drive-time ETA",
+        url=f"http://{host}:{port}/",
+        version="2.0.0",
+        default_input_modes=["text/plain"],
+        default_output_modes=["text/plain"],
+        capabilities=AgentCapabilities(streaming=True),
+        skills=[
+            AgentSkill(
+                id="find-nearest-emergency-rooms",
+                name="Find nearest emergency rooms",
+                description="Ranks nearby emergency rooms by traffic-aware ETA from the patient's location",
+                tags=["hospitals", "location", "eta"],
+                examples=["지금 카이스트 문지캠퍼스인데 근처 응급실을 가까운 순으로 알려줘."],
+            )
+        ],
+    )
+
+    data_dir = _data_dir()
+    adk_agent = create_agent()
+    runner = Runner(
+        app_name=AGENT_NAME,
+        agent=adk_agent,
+        artifact_service=InMemoryArtifactService(),
+        session_service=DatabaseSessionService(
+            f"sqlite+aiosqlite:///{data_dir}/{AGENT_NAME}_sessions.db"
+        ),
+        memory_service=InMemoryMemoryService(),
+    )
+
+    task_engine = create_async_engine(
+        f"sqlite+aiosqlite:///{data_dir}/{AGENT_NAME}_tasks.db"
+    )
+
+    @asynccontextmanager
+    async def lifespan(app):
+        yield
+        await task_engine.dispose()
+
+    app = to_a2a(
+        adk_agent,
+        host=host,
+        port=port,
+        agent_card=agent_card,
+        runner=runner,
+        task_store=DatabaseTaskStore(engine=task_engine),
+        lifespan=lifespan,
+    )
+
+    a2a_auth_token = os.getenv("A2A_AUTH_TOKEN")
+    if a2a_auth_token:
+        app.add_middleware(BearerAuthMiddleware, token=a2a_auth_token)
+    else:
+        logger.warning(
+            "A2A_AUTH_TOKEN is not set - this A2A endpoint accepts "
+            "unauthenticated requests. Set the same A2A_AUTH_TOKEN on every "
+            "agent before handling real patient data."
         )
 
-        adk_agent = create_agent()
-        runner = Runner(
-            app_name=agent_card.name,
-            agent=adk_agent,
-            artifact_service=InMemoryArtifactService(),
-            session_service=InMemorySessionService(),
-            memory_service=InMemoryMemoryService(),
-        )
-        agent_executor = TrafficAgentExecutor(runner)
-
-        request_handler = DefaultRequestHandler(
-            agent_executor=agent_executor,
-            task_store=InMemoryTaskStore(),
-        )
-        server = A2AStarletteApplication(
-            agent_card=agent_card, http_handler=request_handler
-        )
-
-        uvicorn.run(server.build(), host=host, port=port)
-    except MissingAPIKeyError as e:
-        logger.error(f"Error: {e}")
-        exit(1)
-    except Exception as e:
-        logger.error(f"An error occurred during server startup: {e}")
-        exit(1)
+    logger.info("Starting %s on %s:%s (data dir: %s)", AGENT_NAME, host, port, data_dir)
+    uvicorn.run(app, host=host, port=port)
 
 
 if __name__ == "__main__":

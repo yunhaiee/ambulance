@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.multiDestinationDirectionSearchHandler = exports.multiDestinationDirectionSearchSchema = void 0;
 const zod_1 = require("zod");
 const dotenv_1 = __importDefault(require("dotenv"));
+const kakaoFetch_js_1 = require("./kakaoFetch.js");
 dotenv_1.default.config();
 exports.multiDestinationDirectionSearchSchema = {
     origin: zod_1.z.object({
@@ -28,44 +29,14 @@ const multiDestinationDirectionSearchHandler = async (params) => {
     const requestBody = Object.assign(Object.assign(Object.assign({ origin,
         destinations,
         radius }, (priority && { priority })), (avoid && { avoid })), (roadevent !== undefined && { roadevent }));
-    try {
-        const response = await fetch("https://apis-navi.kakaomobility.com/v1/destinations/directions", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `KakaoAK ${process.env.KAKAO_REST_API_KEY}`,
-            },
-            body: JSON.stringify(requestBody),
-        });
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error("Kakao API Error:", response.status, errorText);
-            return {
-                content: [{
-                        type: "text",
-                        text: `Kakao API request failed: ${response.status} ${errorText}`,
-                    }],
-                isError: true,
-            };
-        }
-        const data = await response.json();
-        return {
-            content: [{
-                    type: "text",
-                    text: JSON.stringify(data),
-                }],
-            isError: false,
-        };
+    const result = await kakaoFetch_js_1.kakaoFetchJson("https://apis-navi.kakaomobility.com/v1/destinations/directions", {
+        method: "POST",
+        headers: kakaoFetch_js_1.kakaoHeaders(),
+        body: JSON.stringify(requestBody),
+    });
+    if (!result.ok) {
+        return kakaoFetch_js_1.toolError(`multi_destination_direction_search failed: ${result.error}`);
     }
-    catch (error) {
-        console.error("Error calling Kakao Multi-Destination API:", error);
-        return {
-            content: [{
-                    type: "text",
-                    text: `An error occurred: ${error.message}`,
-                }],
-            isError: true,
-        };
-    }
+    return kakaoFetch_js_1.toolSuccess(result.data);
 };
 exports.multiDestinationDirectionSearchHandler = multiDestinationDirectionSearchHandler;
