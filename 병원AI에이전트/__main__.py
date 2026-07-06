@@ -20,6 +20,13 @@ _profile = os.getenv("HOSPITAL_PROFILE")
 if _profile:
     load_dotenv(_profile, override=True)
 load_dotenv()
+# Optional per-hospital secret overrides (e.g. a distinct GOOGLE_API_KEY so each
+# instance gets its own free-tier quota). Gitignored; loaded last so it wins.
+_agent_name = os.getenv("HOSPITAL_AGENT_NAME")
+if _agent_name:
+    _secret_file = Path(__file__).parent / f".env.{_agent_name}"
+    if _secret_file.exists():
+        load_dotenv(_secret_file, override=True)
 
 import uvicorn
 from a2a.server.tasks import DatabaseTaskStore
