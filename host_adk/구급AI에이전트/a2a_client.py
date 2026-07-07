@@ -70,8 +70,11 @@ class RemoteAgentRegistry:
             timeout=httpx.Timeout(10, read=DEFAULT_TIMEOUT_S),
             headers=a2a_auth_headers(),
         )
+        # Streaming (SSE): the ADK to_a2a server pushes task updates (including
+        # the final artifacts) over one connection, which is more reliable than
+        # polling get_task against an async executor.
         self._factory = ClientFactory(
-            ClientConfig(httpx_client=self._httpx_client, streaming=False, polling=True)
+            ClientConfig(httpx_client=self._httpx_client, streaming=True)
         )
         self.cards: dict[str, AgentCard] = {}
         self._clients: dict[str, object] = {}
@@ -169,18 +172,17 @@ class RemoteAgentRegistry:
         message = create_text_message_object(Role.user, text)
         task: Task | None = None
         last_message_text = ""
+        # With streaming, the iterator yields task snapshots as the remote agent
+        # works and closes once the task is terminal, so the last snapshot carries
+        # the final artifacts. Keep the newest snapshot that has artifact text.
+        best_task_text = ""
         async for event in client.send_message(message):
             if isinstance(event, Message):
                 last_message_text = _message_text(event)
             else:
                 task, _update = event
+                text_now = _task_text(task)
+                if text_now:
+                    best_task_text = text_now
 
-        if task is None:
-            return last_message_text
-
-        # Poll until the task reaches a terminal state, then read its artifacts.
-        while task.status is None or task.status.state not in _TERMINAL_STATES:
-            await asyncio.sleep(0.6)
-            task = await client.get_task(TaskQueryParams(id=task.id))
-
-        return _task_text(task) or last_message_text
+        return best_task_text or last_message_text
