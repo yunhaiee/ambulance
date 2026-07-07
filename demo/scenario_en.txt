@@ -1,0 +1,6 @@
+Emergency patient. Assess (KTAS), then get the hospital list from the traffic agent, query hospitals in parallel, and handle insurance — all the way through in one go. All info is provided; do NOT ask back.
+- Name: Hong Gildong, DOB: 1968-03-15, 57yo male, conscious
+- Symptoms: onset ~30 min ago (20:45). Sudden right-side weakness/paralysis + slurred speech (dysarthria)
+- Vitals: BP 185/105, HR 92, RR 20, Temp 36.6, SpO2 97%
+- Current location: Daejeon Station (대전역)
+- History: hypertension, diabetes / NOT a traffic accident

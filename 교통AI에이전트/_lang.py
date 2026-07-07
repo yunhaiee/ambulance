@@ -9,6 +9,7 @@ import re
 from google.adk.agents.readonly_context import ReadonlyContext
 
 _HANGUL = re.compile(r"[가-힣]")
+_LATIN = re.compile(r"[A-Za-z]")
 
 _EN_DIRECTIVE = (
     "OUTPUT LANGUAGE: ENGLISH ONLY. The incoming request is in English; write ALL "
@@ -20,13 +21,15 @@ _KO_DIRECTIVE = "출력 언어: 한국어. 사람이 읽는 모든 출력(및 Sl
 
 
 def _detect_lang(context: ReadonlyContext) -> str:
+    # Korean if Hangul dominates (not mere presence), so an English request that
+    # contains a Korean place name is still detected as English.
     text = ""
     user_content = getattr(context, "user_content", None)
     if user_content is not None:
         for part in getattr(user_content, "parts", None) or []:
             if getattr(part, "text", None):
                 text += part.text
-    return "ko" if _HANGUL.search(text) else "en"
+    return "ko" if len(_HANGUL.findall(text)) > len(_LATIN.findall(text)) else "en"
 
 
 def make_instruction(base_prompt: str):
