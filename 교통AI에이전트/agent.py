@@ -11,6 +11,7 @@ from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset
 
 load_dotenv()
 
+from _lang import make_instruction
 from prompt import MAP_MCP_PROMPT
 from slack_tool import slack_post_message
 
@@ -22,7 +23,7 @@ def create_agent() -> LlmAgent:
     return LlmAgent(
         model=os.getenv("AGENT_MODEL", "gemini-2.5-flash-lite"),
         name="교통AI에이전트",
-        instruction=MAP_MCP_PROMPT,
+        instruction=make_instruction(MAP_MCP_PROMPT),
         tools=[
             MCPToolset(
                 connection_params=StdioConnectionParams(

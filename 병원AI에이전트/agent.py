@@ -4,6 +4,7 @@ import os
 
 from google.adk.agents import LlmAgent
 
+from _lang import make_instruction
 from capacity import check_capacity
 from prompt import build_prompt
 from slack_tool import slack_post_message
@@ -17,6 +18,6 @@ def create_agent() -> LlmAgent:
     return LlmAgent(
         model=os.getenv("AGENT_MODEL", "gemini-2.5-flash-lite"),
         name=agent_name,
-        instruction=build_prompt(),
+        instruction=make_instruction(build_prompt()),
         tools=[check_capacity, slack_post_message],
     )
