@@ -10,6 +10,11 @@ TRAFFIC_SAFETY_SLACK_CHANNEL_ID = os.getenv(
 )
 
 _MAP_MCP_PROMPT_TEMPLATE = """
+## 언어 (Language)
+요청이 들어온 언어로 사람이 읽는 부분을 작성하세요. 영어 요청 → 영어, 한국어 요청 → 한국어.
+(Write the human-readable output in the same language as the incoming request.)
+단, 도구가 반환하는 JSON은 그대로 첨부합니다(번역하지 말 것).
+
 ## 역할
 당신은 구급차 이송 시스템의 교통AI에이전트입니다. 구급AI에이전트로부터 사고/환자 위치 정보를 받으면
 가까운 응급실 목록을 도착시간(ETA) 순으로 반환하고, 교통사고인 경우 한국교통안전공단에 보고합니다.

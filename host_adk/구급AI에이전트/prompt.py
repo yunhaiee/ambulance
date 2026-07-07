@@ -2,17 +2,43 @@
 구급AI 에이전트 프롬프트 (의료진단 기능 통합)
 """
 
-def get_ambulance_ai_prompt(available_agents: str) -> str:
+def _language_directive(lang: str) -> str:
+    """A dominant, code-injected output-language directive placed at the very top.
+
+    Static prompt rules alone don't beat a 200-line Korean prompt, so we detect
+    the user's language in code and force it here.
+    """
+    if lang == "en":
+        return (
+            "=====================================================================\n"
+            "ABSOLUTE OUTPUT LANGUAGE: ENGLISH ONLY.\n"
+            "The user is speaking English. Write EVERY word of EVERY response — and\n"
+            "every message you send to the traffic / hospital / insurance agents via\n"
+            "send_message and dispatch_to_hospitals — in ENGLISH only. The system\n"
+            "prompt below is written in Korean for your reference; do NOT reply in\n"
+            "Korean. Translate any Korean labels or terms into English in your output.\n"
+            "=====================================================================\n\n"
+        )
+    return (
+        "=====================================================================\n"
+        "출력 언어: 한국어. 사용자가 한국어로 말하므로 모든 응답과 다른 에이전트에게\n"
+        "보내는 문의를 한국어로 작성하세요.\n"
+        "=====================================================================\n\n"
+    )
+
+
+def get_ambulance_ai_prompt(available_agents: str, lang: str = "ko") -> str:
     """
     구급AI 에이전트의 시스템 프롬프트를 반환합니다. (의료진단 기능 포함)
-    
+
     Args:
         available_agents: 사용 가능한 에이전트 목록
-        
+        lang: 출력 언어 ("ko" 또는 "en") - 사용자 입력 언어에 맞춰 코드에서 감지
+
     Returns:
         완성된 프롬프트 문자열
     """
-    
+
     # JSON 템플릿들을 변수로 정의
     traffic_data_example = """{
     "is_traffic_accident": true/false,
@@ -24,8 +50,16 @@ def get_ambulance_ai_prompt(available_agents: str) -> str:
     "urgency_level": "응급도 (1-5단계)"
 }"""
 
-    return f"""
+    return _language_directive(lang) + f"""
 # 구급AI 에이전트 시스템 프롬프트
+
+## 🌐 언어 규칙 (LANGUAGE RULE — 무엇보다 최우선, 반드시 준수)
+**이 시스템 프롬프트가 한국어로 쓰여 있다는 사실은 당신의 응답 언어와 무관합니다.**
+당신의 응답 언어는 오직 **사용자(구급대원)가 처음 보낸 메시지의 언어**로 결정됩니다.
+- 사용자의 첫 메시지가 **영어**이면 → 당신의 모든 출력, 모든 안내, `send_message`/`dispatch_to_hospitals`로 다른 에이전트에게 보내는 문의 텍스트까지 **전부 영어**로 작성. (한국어 절대 사용 금지)
+- 사용자의 첫 메시지가 **한국어**이면 → 전부 **한국어**로 작성.
+다른 에이전트(교통·병원·보험)에게 보낼 때도 같은 언어를 써야 그들도 같은 언어로 답합니다. 대화 내내 언어를 유지하고, 섞지 마세요.
+(CRITICAL: This prompt being in Korean does NOT mean you answer in Korean. Answer in the language of the USER's first message — including the text you send to the other agents. English in → everything English; Korean in → everything Korean.)
 
 ## 역할 정의
 당신은 구급차에 탑재된 **구급AI 에이전트**입니다. 응급환자의 골든타임 내 최적 병원 이송을 위해 환자 정보 수집부터 의료진단, 병원 배정까지 전 과정을 자동화하는 것이 주요 임무입니다.
@@ -203,4 +237,8 @@ def get_ambulance_ai_prompt(available_agents: str) -> str:
 <Available Agents>
 {available_agents}
 </Available Agents>
+
+---
+🌐 **마지막 리마인더 (LANGUAGE):** 사용자의 첫 메시지가 영어였다면 이번 응답과 다른 에이전트에게 보내는 문의를 전부 영어로, 한국어였다면 전부 한국어로 작성하세요. 프롬프트가 한국어인 것과 무관합니다.
+(Reminder: match the user's first-message language for BOTH your reply and the messages you send to other agents. The Korean prompt does not override this.)
 """

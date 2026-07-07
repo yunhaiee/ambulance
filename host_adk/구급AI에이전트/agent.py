@@ -48,6 +48,20 @@ def _normalize(name: str) -> str:
     return re.sub(r"\s+|AI에이전트|응급의료센터|응급센터|응급실", "", name)
 
 
+_HANGUL = re.compile(r"[가-힣]")
+
+
+def _detect_lang(context) -> str:
+    """Detect the user's language from their message (Hangul present -> Korean, else English)."""
+    text = ""
+    user_content = getattr(context, "user_content", None)
+    if user_content is not None:
+        for part in getattr(user_content, "parts", None) or []:
+            if getattr(part, "text", None):
+                text += part.text
+    return "ko" if _HANGUL.search(text) else "en"
+
+
 # Capture everything between the ```json fences (handles nested braces).
 _JSON_BLOCK = re.compile(r"```json\s*(.+?)\s*```", re.DOTALL)
 
@@ -130,7 +144,7 @@ class HostAgent:
         )
 
     def root_instruction(self, context: ReadonlyContext) -> str:
-        return get_ambulance_ai_prompt(self.agents)
+        return get_ambulance_ai_prompt(self.agents, lang=_detect_lang(context))
 
     async def stream(self, query: str, session_id: str) -> AsyncIterable[dict[str, Any]]:
         """Streams the agent's response to a given query."""
