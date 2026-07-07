@@ -49,17 +49,22 @@ def _normalize(name: str) -> str:
 
 
 _HANGUL = re.compile(r"[가-힣]")
+_LATIN = re.compile(r"[A-Za-z]")
 
 
 def _detect_lang(context) -> str:
-    """Detect the user's language from their message (Hangul present -> Korean, else English)."""
+    """Detect the user's language: Korean if Hangul dominates, else English.
+
+    Uses a ratio (not mere presence) so an English message that contains a Korean
+    place name (e.g. "Daejeon Station (대전역)") is still detected as English.
+    """
     text = ""
     user_content = getattr(context, "user_content", None)
     if user_content is not None:
         for part in getattr(user_content, "parts", None) or []:
             if getattr(part, "text", None):
                 text += part.text
-    return "ko" if _HANGUL.search(text) else "en"
+    return "ko" if len(_HANGUL.findall(text)) > len(_LATIN.findall(text)) else "en"
 
 
 # Capture everything between the ```json fences (handles nested braces).

@@ -15,3 +15,4 @@ node_modules/
 .claude/
 fill_keys.sh
 set_gemini_keys.sh
+demo/out_*.txt
