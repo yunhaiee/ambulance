@@ -97,9 +97,36 @@ def _parse_hospital_reply(text: str) -> dict:
         found = _find_decision(payload)
         if found:
             return found
-    if "수용불가" in text or "❌" in text:
+    # The LLM sometimes emits the JSON without the ```json fences: scan for a
+    # brace-balanced object around each "decision" occurrence.
+    for pos in (m.start() for m in re.finditer(r'"decision"', text)):
+        start = text.rfind("{", 0, pos)
+        while start != -1:
+            depth = 0
+            for end in range(start, len(text)):
+                if text[end] == "{":
+                    depth += 1
+                elif text[end] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            found = _find_decision(json.loads(text[start:end + 1]))
+                            if found:
+                                return found
+                        except json.JSONDecodeError:
+                            pass
+                        break
+            start = text.rfind("{", 0, start)
+    # Marker fallback - decline patterns MUST be checked first ("cannot accept"
+    # contains "accept"). Korean and English.
+    lowered = text.lower()
+    if "수용불가" in text or "❌" in text or re.search(
+        r"cannot accept|unable to accept|not able to accept|declin", lowered
+    ):
         return {"decision": "decline"}
-    if "수용가능" in text or "✅" in text:
+    if "수용가능" in text or "✅" in text or re.search(
+        r"can accept|able to accept|accepts? the patient|acceptance:?\s*(yes|possible)", lowered
+    ):
         return {"decision": "accept"}
     return {"decision": "unclear"}
 
