@@ -26,7 +26,7 @@ echo "OK (한도 사용 가능)"
 
 echo "== 원격 에이전트 4개 기동 =="
 (cd "$REPO/교통AI에이전트"  && AGENT_MODEL=$M AMBULANCE_DATA_DIR="$D" "$V/ambulance-교통AI에이전트/bin/python" __main__.py >"$LOG/traffic.log" 2>&1 &)
-(cd "$REPO/병원AI에이전트" && HOSPITAL_PROFILE=configs/대전한국병원.env AGENT_MODEL=$M AMBULANCE_DATA_DIR="$D" "$V/ambulance-병원AI에이전트/bin/python" __main__.py >"$LOG/hanguk.log" 2>&1 &)
+(cd "$REPO/병원AI에이전트" && HOSPITAL_PROFILE=configs/대전성모병원.env AGENT_MODEL=$M AMBULANCE_DATA_DIR="$D" "$V/ambulance-병원AI에이전트/bin/python" __main__.py >"$LOG/stmary.log" 2>&1 &)
 (cd "$REPO/병원AI에이전트" && HOSPITAL_PROFILE=configs/대전선병원.env  AGENT_MODEL=$M AMBULANCE_DATA_DIR="$D" "$V/ambulance-병원AI에이전트/bin/python" __main__.py >"$LOG/sun.log" 2>&1 &)
 (cd "$REPO/보험AI에이전트"  && AGENT_MODEL=$M AMBULANCE_DATA_DIR="$D" "$V/ambulance-보험AI에이전트/bin/python" __main__.py >"$LOG/insurance.log" 2>&1 &)
 
