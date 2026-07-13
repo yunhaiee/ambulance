@@ -5,7 +5,6 @@ import os
 import re
 from typing import Any, AsyncIterable, List
 
-import nest_asyncio
 from dotenv import load_dotenv
 from google.adk import Agent
 from google.adk.agents.readonly_context import ReadonlyContext
@@ -21,7 +20,6 @@ from .audit import audit_log
 from .prompt import get_ambulance_ai_prompt
 
 load_dotenv()
-nest_asyncio.apply()
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +29,7 @@ HOSPITAL_DISPATCH_TIMEOUT_S = float(os.getenv("HOSPITAL_DISPATCH_TIMEOUT_S", "45
 
 DEFAULT_REMOTE_AGENT_URLS = [
     "http://localhost:10002",  # 교통
-    "http://localhost:10003",  # 병원 (대전한국병원)
+    "http://localhost:10003",  # 병원 (대전성모병원)
     "http://localhost:10004",  # 병원 (대전선병원)
     "http://localhost:10005",  # 보험
 ]
@@ -132,11 +130,20 @@ def _parse_hospital_reply(text: str) -> dict:
 
 
 class HostAgent:
-    """The Host agent: orchestrates traffic, hospital, and insurance agents."""
+    """The Host agent: orchestrates traffic, hospital, and insurance agents.
 
-    def __init__(self):
+    Remote agent cards are resolved LAZILY on first use (async instruction /
+    first tool call) instead of at import time. This removes the old
+    nest_asyncio + asyncio.run()-at-import hack, which corrupted adk web's
+    event loop (IndexError: pop from an empty deque).
+    """
+
+    def __init__(self, remote_agent_addresses: List[str] | None = None):
         self.registry = RemoteAgentRegistry()
         self.agents: str = "No agents found"
+        self._remote_addresses = remote_agent_addresses
+        self._connected = False
+        self._connect_lock = asyncio.Lock()
         self._agent = self.create_agent()
         self._user_id = "구급AI에이전트"
         self._runner = Runner(
@@ -146,6 +153,18 @@ class HostAgent:
             session_service=InMemorySessionService(),
             memory_service=InMemoryMemoryService(),
         )
+
+    async def _ensure_connected(self):
+        """Resolve remote agent cards once, on the caller's event loop."""
+        if self._connected:
+            return
+        async with self._connect_lock:
+            if self._connected:
+                return
+            await self._async_init_components(
+                self._remote_addresses or _remote_agent_urls()
+            )
+            self._connected = True
 
     async def _async_init_components(self, remote_agent_addresses: List[str]):
         await self.registry.connect(remote_agent_addresses)
@@ -157,8 +176,8 @@ class HostAgent:
 
     @classmethod
     async def create(cls, remote_agent_addresses: List[str]):
-        instance = cls()
-        await instance._async_init_components(remote_agent_addresses)
+        instance = cls(remote_agent_addresses)
+        await instance._ensure_connected()
         return instance
 
     def create_agent(self) -> Agent:
@@ -175,7 +194,10 @@ class HostAgent:
             ],
         )
 
-    def root_instruction(self, context: ReadonlyContext) -> str:
+    async def root_instruction(self, context: ReadonlyContext) -> str:
+        # ADK supports async instruction providers; connecting here guarantees
+        # the agent list is populated before the first LLM call.
+        await self._ensure_connected()
         return get_ambulance_ai_prompt(self.agents, lang=_detect_lang(context))
 
     async def stream(self, query: str, session_id: str) -> AsyncIterable[dict[str, Any]]:
@@ -217,6 +239,7 @@ class HostAgent:
         {"status": "error"|"timeout", "reason": ...}. On an error, decide the
         fallback yourself (e.g. retry once or report to the paramedic).
         """
+        await self._ensure_connected()
         audit_log.record("dispatch_sent", agent=agent_name, task_chars=len(task))
         result = await self.registry.send(agent_name, task)
         audit_log.record(
@@ -248,6 +271,7 @@ class HostAgent:
         the lowest-ETA accepting hospital); hospitals with "no_agent" must be
         phoned manually by the paramedic.
         """
+        await self._ensure_connected()
         known_hospital_agents = [
             name for name in self.registry.agent_names
             if "병원" in name or "hospital" in name.lower()
@@ -323,29 +347,6 @@ class HostAgent:
         return {"results": results}
 
 
-def _get_initialized_host_agent_sync():
-    """Synchronously creates and initializes the HostAgent."""
-
-    async def _async_main():
-        logger.info("initializing host agent")
-        hosting_agent_instance = await HostAgent.create(
-            remote_agent_addresses=_remote_agent_urls()
-        )
-        logger.info("HostAgent initialized")
-        return hosting_agent_instance.create_agent()
-
-    try:
-        return asyncio.run(_async_main())
-    except RuntimeError as e:
-        if "asyncio.run() cannot be called from a running event loop" in str(e):
-            logger.warning(
-                "Could not initialize HostAgent with asyncio.run(): %s. "
-                "This can happen if an event loop is already running (e.g., in Jupyter). "
-                "Consider initializing HostAgent within an async function in your application.",
-                e,
-            )
-        else:
-            raise
-
-
-root_agent = _get_initialized_host_agent_sync()
+# No I/O at import time: remote agent cards are resolved lazily on first use.
+_host_agent_instance = HostAgent()
+root_agent = _host_agent_instance._agent
