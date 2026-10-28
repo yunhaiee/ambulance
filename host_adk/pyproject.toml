@@ -1,4 +1,4 @@
-# Host (구급AI에이전트) - orchestrates the emergency dispatch via A2A.
+# Host (ems_agent) - orchestrates the emergency dispatch via A2A.
 # Dependencies are intentionally minimal: only what the code imports.
 
 [project]

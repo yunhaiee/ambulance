@@ -1,18 +1,20 @@
-# Secrets - never commit real keys/tokens (use .env.example as the template)
+# Secrets - never commit real keys/tokens (use the .env.example files as templates)
 .env
 .env.*
 !.env.example
+hospital_agent/configs/*.env
 
 # Python
 __pycache__/
 *.pyc
 .venv/
+.adk/
 
 # Node
 node_modules/
 
-# Claude Code
+# Local
 .claude/
 fill_keys.sh
 set_gemini_keys.sh
-demo/out_*.txt
+demo/out*.txt

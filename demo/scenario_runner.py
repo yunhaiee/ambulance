@@ -1,6 +1,6 @@
 """Run one emergency-dispatch scenario through the host and print the final response.
 
-Reads the patient text from stdin. Run via demo/run_both.sh (which boots the
+Reads the patient text from stdin. Run via demo/run_demo.sh (which boots the
 remote agents first). Requires PYTHONPATH=<repo>/host_adk.
 """
 
@@ -9,7 +9,7 @@ import sys
 import time
 import uuid
 
-from 구급AI에이전트.agent import HostAgent, _remote_agent_urls
+from ems_agent.agent import HostAgent, _remote_agent_urls
 
 
 async def main() -> None:
